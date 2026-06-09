@@ -19,7 +19,7 @@ class TestSymbolIsBR:
         assert Symbol.is_br("MSFT") is False
 
     def test_three_letter_ticker_is_not_br(self):
-        # B3 tickers are exactly 4 letters + 1-2 digits. Kills the
+        # B3 tickers are exactly 4 alphanumeric chars + 1-2 digits. Kills the
         # `{4}` → `{3}` regex mutation that would falsely classify
         # 3-letter prefixes as BR.
         assert Symbol.is_br("ABC3") is False
@@ -29,6 +29,37 @@ class TestSymbolIsBR:
         # Even non-standard prefixes are treated as BR when the suffix
         # is present (data is already provider-canonical).
         assert Symbol.is_br("UNUSUAL.SA") is True
+
+    def test_b3sa3_bare_is_br(self):
+        # B3SA3 has a digit in position 2 of the company code (B3SA).
+        # Kills the `[A-Z0-9]{4}` → `[A-Z]{4}` mutation that would
+        # silently treat this real B3 stock as a US ticker.
+        assert Symbol.is_br("B3SA3") is True
+
+    def test_b3sa3_with_suffix_is_br(self):
+        assert Symbol.is_br("B3SA3.SA") is True
+
+    def test_b3sa3_country_is_BR(self):
+        # country() must route to BR providers; US routing would silently
+        # fetch the wrong exchange.
+        assert Symbol.country("B3SA3") == "BR"
+        assert Symbol.country("B3SA3.SA") == "BR"
+
+    def test_b3sa3_canonicalize_adds_sa(self):
+        # Without the .SA suffix the yfinance call will find a different
+        # (incorrect) ticker on a non-B3 exchange.
+        assert Symbol.canonicalize("B3SA3") == "B3SA3.SA"
+        assert Symbol.canonicalize("B3SA3.SA") == "B3SA3.SA"
+
+    def test_b3sa3_expands_to_both_forms(self):
+        out = Symbol.expand_variants(["B3SA3"])
+        assert "B3SA3" in out
+        assert "B3SA3.SA" in out
+
+    def test_pure_digit_prefix_not_br(self):
+        # The `[A-Z0-9]{4}` change must not over-match: a pure-digit prefix
+        # is not a valid B3 root code.
+        assert Symbol.is_br("1234") is False
 
 
 class TestSymbolCountry:

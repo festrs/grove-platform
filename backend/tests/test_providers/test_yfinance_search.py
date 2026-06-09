@@ -252,3 +252,67 @@ def test_yfinance_failure_returns_empty_not_raises():
     with patch("app.providers.yfinance.yf.Search", side_effect=RuntimeError("boom")):
         out = p.search("AAPL")
     assert out == []
+
+
+# --- B3SA3 regression tests -------------------------------------------------
+# B3SA3 (B3 S.A.) has a digit in position 2 of the company code ("B3SA").
+# The old `^[A-Z]{4}\d{1,2}$` pattern would silently drop it from search
+# results and misclassify it as a US ticker.
+
+def _b3sa3_quote() -> dict:
+    return {
+        "quoteType": "EQUITY",
+        "exchange": "SAO",
+        "symbol": "B3SA3.SA",
+        "longname": "B3 S.A. - Brasil, Bolsa, Balcão",
+        "shortname": "B3SA3",
+        "sector": "Financial Services",
+        "industry": "Financial Data & Stock Exchanges",
+    }
+
+
+def test_b3sa3_maps_to_stock_type():
+    """B3SA3 must survive the ticker-shape filter and land in the 'stock' bucket."""
+    p = YFinanceProvider()
+    with patch("app.providers.yfinance.yf.Search", side_effect=_mock_search([_b3sa3_quote()])):
+        out = p.search("B3SA3")
+    assert len(out) == 1
+    assert out[0]["symbol"] == "B3SA3.SA"
+    assert out[0]["type"] == "stock"
+
+
+def test_b3sa3_not_classified_as_fund():
+    # Ticker ends in "3", not "11" — must NOT be misclassified as a FII.
+    # Kills the mutation where the `endswith("11")` branch order is swapped
+    # with the catch-all "stock" assignment.
+    p = YFinanceProvider()
+    with patch("app.providers.yfinance.yf.Search", side_effect=_mock_search([_b3sa3_quote()])):
+        out = p.search("B3SA3")
+    assert out[0]["type"] != "fund"
+
+
+def test_b3sa3_not_classified_as_bdr():
+    # Ticker does not end in a BDR suffix (32/33/34/35/39) — must not be
+    # misclassified as a BDR.
+    p = YFinanceProvider()
+    with patch("app.providers.yfinance.yf.Search", side_effect=_mock_search([_b3sa3_quote()])):
+        out = p.search("B3SA3")
+    assert out[0]["type"] != "bdr"
+
+
+def test_b3sa3_acoesBR_scoped_search_includes_result():
+    """An asset_class="acoesBR" scoped search must include B3SA3 in results."""
+    p = YFinanceProvider()
+    with patch("app.providers.yfinance.yf.Search", side_effect=_mock_search([_b3sa3_quote()])):
+        out = p.search("B3SA3", asset_class="acoesBR")
+    assert any(r["symbol"] == "B3SA3.SA" for r in out)
+
+
+def test_b3sa3_no_longname_is_dropped():
+    # SAO tickers without a longname are B3 noise (options/forwards). B3SA3
+    # WITH a longname must pass; B3SA3 WITHOUT must be dropped.
+    p = YFinanceProvider()
+    noise = {**_b3sa3_quote(), "longname": "", "shortname": "B3SA3"}
+    with patch("app.providers.yfinance.yf.Search", side_effect=_mock_search([noise])):
+        out = p.search("B3SA3")
+    assert out == []

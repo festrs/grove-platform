@@ -20,8 +20,9 @@ class Symbol:
     and so callers can't drift toward inconsistent custom regexes.
     """
 
-    # B3 tickers: 4 letters + 1-2 digits (PETR4, ITUB3, KNRI11, BTLG11, AAPL34 BDRs).
-    _BR_PATTERN = re.compile(r"^[A-Z]{4}\d{1,2}$")
+    # B3 tickers: 4 alphanumeric chars + 1-2 digits (PETR4, ITUB3, KNRI11, B3SA3).
+    # The prefix allows digits because some tickers like B3SA3 have a digit in the code.
+    _BR_PATTERN = re.compile(r"^[A-Z0-9]{4}\d{1,2}$")
     _SA_SUFFIX = ".SA"
 
     @classmethod

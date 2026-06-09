@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)
 _ALLOWED_EXCHANGES = {"SAO", "NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "OPR"}
 _US_EXCHANGES = {"NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "OPR"}
 
-# B3 tickers are 4 letters + 1-2 digits. Variants like PETR4F / PETR4Q
+# B3 tickers are 4 alphanumeric chars + 1-2 digits. Variants like PETR4F / PETR4Q
 # (forwards/options) leak into yf.Search and must be dropped.
-_B3_TICKER_RE = re.compile(r"^[A-Z]{4}\d{1,2}$")
+# The prefix allows digits to handle tickers like B3SA3 (B3 S.A.).
+_B3_TICKER_RE = re.compile(r"^[A-Z0-9]{4}\d{1,2}$")
 _BDR_SUFFIXES = ("32", "33", "34", "35", "39")
 
 # iOS AssetClassType.rawValue → the set of apiType values _map_quote produces
